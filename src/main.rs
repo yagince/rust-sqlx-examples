@@ -1,4 +1,6 @@
 use once_cell::sync::Lazy;
+use sqlx::postgres::PgRow;
+use sqlx::prelude::Row;
 
 struct Config {
     postgres_host: String,
@@ -37,6 +39,37 @@ struct User {
     pub updated_at: chrono::NaiveDateTime,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct NewUser {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, sqlx::Type)]
+#[repr(i32)]
+enum PostVisibility {
+    Public = 1,
+    Private = 2,
+}
+
+#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+struct Post {
+    pub id: i64,
+    pub visibility: PostVisibility,
+    pub user_id: i64,
+    pub title: String,
+    pub body: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct NewPost {
+    pub user_id: i64,
+    pub visibility: PostVisibility,
+    pub title: String,
+    pub body: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let pool = sqlx::postgres::PgPoolOptions::new()
@@ -50,6 +83,79 @@ async fn main() -> anyhow::Result<()> {
 
     println!("{:?}", users.len());
     println!("{:?}", users);
+
+    let mut transaction = pool.begin().await?;
+
+    let new_user = NewUser {
+        name: "testtest".to_owned(),
+    };
+    let user = sqlx::query_as::<_, User>(
+        r#"
+insert into users (name)
+values ($1)
+returning *
+"#,
+    )
+    .bind(&new_user.name)
+    .fetch_one(&mut transaction)
+    .await?;
+
+    let new_post = NewPost {
+        user_id: user.id,
+        visibility: PostVisibility::Public,
+        title: format!("Title-{}", user.id),
+        body: None,
+    };
+
+    let post = sqlx::query_as::<_, Post>(
+        r#"
+insert into posts (user_id, visibility, title, body)
+values ($1, $2, $3, $4)
+returning *
+"#,
+    )
+    .bind(&new_post.user_id)
+    .bind(&new_post.visibility)
+    .bind(&new_post.title)
+    .bind(&new_post.body)
+    .fetch_one(&mut transaction)
+    .await?;
+
+    println!("{:?}", user);
+    println!("{:?}", post);
+
+    let users = sqlx::query(
+        r#"
+select
+  users.id, users.name, users.created_at, users.updated_at,
+  posts.id, posts.user_id, posts.title, posts.body, posts.visibility, posts.created_at, posts.updated_at
+from users
+inner join posts on users.id = posts.user_id
+"#,
+    )
+        .map(|row: PgRow| {
+            (
+                User {
+                    id: row.get(0),
+                    name: row.get(1),
+                    created_at: row.get(2),
+                    updated_at: row.get(3),
+                },
+                Post {
+                    id: row.get(4),
+                    user_id: row.get(5),
+                    title: row.get(6),
+                    body: row.get(7),
+                    visibility: row.get(8),
+                    created_at: row.get(9),
+                    updated_at: row.get(10),
+                },
+            )
+        })
+    .fetch_all(&mut transaction)
+    .await?;
+
+    println!("{:#?}", users);
 
     Ok(())
 }

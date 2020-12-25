@@ -8,6 +8,7 @@ CREATE TABLE users (
 CREATE TABLE posts (
   id         BIGSERIAL    NOT NULL PRIMARY KEY,
   user_id    BIGINT       NOT NULL,
+  visibility INTEGER      NOT NULL,
   title      VARCHAR(255) NOT NULL,
   body       TEXT,
   created_at TIMESTAMP NOT NULL default CURRENT_TIMESTAMP,
