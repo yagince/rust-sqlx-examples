@@ -29,12 +29,27 @@ static CONFIG: Lazy<Config> = Lazy::new(|| Config {
     postgres_database: std::env::var("POSTGRES_DB").unwrap(),
 });
 
+#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+struct User {
+    pub id: i64,
+    pub name: String,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // println!("{:?}", CONFIG.database_url());
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(20)
         .connect(&CONFIG.database_url())
         .await?;
+
+    let users = sqlx::query_as::<_, User>("select * from users")
+        .fetch_all(&pool)
+        .await?;
+
+    println!("{:?}", users.len());
+    println!("{:?}", users);
+
     Ok(())
 }
