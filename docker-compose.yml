@@ -1,0 +1,38 @@
+version: "3.7"
+
+x-environment: &environment
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_DB: postgres
+  PGSSLMODE: disable
+
+services:
+  app:
+    build:
+      context: .
+    container_name: app
+    working_dir: /app
+    command: bash
+    tty: true
+    environment: *environment
+    volumes:
+      - ./:/app
+    ports:
+      - 3000:3000
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:12.3-alpine
+    container_name: postgres
+    environment: *environment
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+    driver: local
